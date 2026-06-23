@@ -1,21 +1,24 @@
-//! Cyberpunk / "Digital World" palette and shared widget styling.
+//! Digimon "Digital World" palette and shared widget styling.
 //!
-//! The aesthetic: near-black background, neon green as the primary signal
-//! colour (matrix rain), cyan for structure/labels, magenta for the "prior"
-//! evolution branch, amber for warnings, and muted grey-green for chrome.
+//! Built from the official Digimon colour palette: Neon Green is the primary
+//! signal colour, Digital Blue carries structure/labels, Pixel Pink marks the
+//! "prior" evolution branch, Cyber Purple frames the active node, Data Yellow
+//! warns, and Virtual Red flags errors. Background is a near-black blue.
 
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::{Block, BorderType};
 
-pub const BG: Color = Color::Rgb(8, 10, 14);
-pub const NEON: Color = Color::Rgb(57, 255, 100); // primary neon green
-pub const CYAN: Color = Color::Rgb(0, 238, 222);
-pub const MAGENTA: Color = Color::Rgb(255, 72, 184);
-pub const AMBER: Color = Color::Rgb(245, 205, 70);
-pub const DIM: Color = Color::Rgb(86, 122, 104); // muted grey-green
-pub const FAINT: Color = Color::Rgb(48, 60, 58);
-pub const FG: Color = Color::Rgb(200, 240, 215);
+pub const BG: Color = Color::Rgb(7, 9, 18); // near-black digital blue
+pub const NEON: Color = Color::Rgb(127, 255, 0); // Neon Green — primary signal
+pub const CYAN: Color = Color::Rgb(0, 132, 255); // Digital Blue — structure/labels
+pub const MAGENTA: Color = Color::Rgb(255, 20, 147); // Pixel Pink — prior branch
+pub const PURPLE: Color = Color::Rgb(155, 48, 255); // Cyber Purple — active node
+pub const AMBER: Color = Color::Rgb(255, 215, 0); // Data Yellow — warnings
+pub const RED: Color = Color::Rgb(255, 36, 0); // Virtual Red — errors
+pub const DIM: Color = Color::Rgb(96, 120, 168); // muted digital blue-grey
+pub const FAINT: Color = Color::Rgb(40, 52, 84);
+pub const FG: Color = Color::Rgb(214, 232, 255);
 
 pub fn cyan() -> Style {
     Style::default().fg(CYAN)
@@ -67,7 +70,7 @@ pub fn english_level(api_level: &str) -> &str {
 pub fn attribute_color(attribute: &str) -> Color {
     match attribute {
         "Vaccine" => NEON,
-        "Virus" => MAGENTA,
+        "Virus" => PURPLE,
         "Data" => CYAN,
         "Free" => AMBER,
         _ => DIM,

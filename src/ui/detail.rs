@@ -45,10 +45,17 @@ pub fn render(f: &mut Frame, area: Rect, app: &mut App) {
         return;
     }
 
-    // Split off a sprite column when there's room.
+    // Split off a sprite column when there's room. Sprites are ~square and a
+    // terminal cell is roughly twice as tall as it is wide, so to fill the box
+    // vertically (it stretches with the pane) the column needs about two columns
+    // per row of height. We grow it with the pane but cap it at 45% of the width
+    // so the data sheet keeps its room.
     let text_area = if inner.width >= MIN_WIDTH_FOR_SPRITE {
+        let max_cols = (inner.width * 9 / 20).max(SPRITE_COLS);
+        let square_cols = inner.height.saturating_sub(2).saturating_mul(2);
+        let sprite_cols = square_cols.clamp(SPRITE_COLS, max_cols);
         let cols =
-            Layout::horizontal([Constraint::Length(SPRITE_COLS), Constraint::Min(0)]).split(inner);
+            Layout::horizontal([Constraint::Length(sprite_cols), Constraint::Min(0)]).split(inner);
         render_sprite(f, cols[0], app);
         cols[1]
     } else {

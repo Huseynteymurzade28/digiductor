@@ -101,7 +101,7 @@ fn render_status(f: &mut Frame, area: Rect, app: &App) {
     // Left: status / error feedback.
     let left = if let Some(err) = &app.error {
         Line::from(vec![
-            Span::styled(" ✖ ", Style::default().fg(theme::MAGENTA)),
+            Span::styled(" ✖ ", Style::default().fg(theme::RED)),
             Span::styled(
                 err.clone(),
                 Style::default()
@@ -121,7 +121,8 @@ fn render_status(f: &mut Frame, area: Rect, app: &App) {
     // Right: contextual key hints.
     let hints = match app.mode {
         InputMode::Search => "type · ⏎ apply · esc cancel",
-        InputMode::Browse => "↑↓ move · / search · l lvl · a attr · x clear · r reload · q quit",
+        InputMode::Browse if app.evo_focus => "↑↓ pick · ⏎ jump · e/esc back",
+        InputMode::Browse => "↑↓ move · e evo · / search · l lvl · a attr · x clear · r · q",
     };
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(format!("{hints} "), theme::dim())))

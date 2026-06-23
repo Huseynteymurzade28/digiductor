@@ -23,17 +23,19 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use crate::app::state::MAX_EVOLUTIONS_SHOWN;
 use crate::app::App;
 use crate::network::api::{Digimon, Evolution};
 use crate::theme;
 
 /// Cap branches so a Digimon with dozens of evolutions doesn't overflow.
-const MAX_BRANCHES: usize = 7;
+const MAX_BRANCHES: usize = MAX_EVOLUTIONS_SHOWN;
 /// Column at which the trunk / connector `│` sits.
 const STEM: usize = 9;
 
 pub fn render(f: &mut Frame, area: Rect, app: &App) {
-    let block = theme::panel("⇄ EVOLUTION MATRIX", false);
+    let focused = app.evo_focus;
+    let block = theme::panel("⇄ EVOLUTION MATRIX", focused);
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -48,23 +50,29 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
         return;
     };
 
-    f.render_widget(Paragraph::new(graph(d)), inner);
+    f.render_widget(Paragraph::new(graph(d, app.evo_selected_id())), inner);
 }
 
-fn graph(d: &Digimon) -> Vec<Line<'static>> {
+fn graph(d: &Digimon, selected: Option<u32>) -> Vec<Line<'static>> {
     let mut lines: Vec<Line> = Vec::new();
 
-    branch_block("PRIOR", &d.prior_evolutions, theme::MAGENTA, &mut lines);
+    branch_block("PRIOR", &d.prior_evolutions, theme::MAGENTA, selected, &mut lines);
     lines.push(connector(!d.prior_evolutions.is_empty()));
     current_box(d, &mut lines);
     lines.push(connector(!d.next_evolutions.is_empty()));
-    branch_block("NEXT", &d.next_evolutions, theme::NEON, &mut lines);
+    branch_block("NEXT", &d.next_evolutions, theme::NEON, selected, &mut lines);
 
     lines
 }
 
 /// Render one side of the tree (the prior- or next-evolution fan-out).
-fn branch_block(label: &str, items: &[Evolution], color: Color, out: &mut Vec<Line<'static>>) {
+fn branch_block(
+    label: &str,
+    items: &[Evolution],
+    color: Color,
+    selected: Option<u32>,
+    out: &mut Vec<Line<'static>>,
+) {
     if items.is_empty() {
         out.push(Line::from(vec![
             Span::styled(format!("{label:>8} "), theme::dim()),
@@ -97,12 +105,23 @@ fn branch_block(label: &str, items: &[Evolution], color: Color, out: &mut Vec<Li
             Span::raw(" ".repeat(STEM))
         };
 
+        // Highlight the entry under the navigation cursor.
+        let highlighted = ev.id.is_some() && ev.id == selected;
+        let name_style = if highlighted {
+            Style::default()
+                .fg(theme::BG)
+                .bg(color)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(color).add_modifier(Modifier::BOLD)
+        };
+
         let mut spans = vec![
             lead,
             Span::styled(branch, theme::dim()),
             Span::styled(
-                format!(" {}", ev.digimon),
-                Style::default().fg(color).add_modifier(Modifier::BOLD),
+                format!(" {}{} ", if highlighted { "▶ " } else { "" }, ev.digimon),
+                name_style,
             ),
         ];
         if !ev.condition.trim().is_empty() {
@@ -141,32 +160,34 @@ fn current_box(d: &Digimon, out: &mut Vec<Line<'static>>) {
     // Left-pad so the box's vertical centre lines up under the trunk `│`.
     let pad = " ".repeat(STEM.saturating_sub(inner_w / 2 + 1));
 
-    let cyan = Style::default().fg(theme::CYAN);
+    let frame = Style::default()
+        .fg(theme::PURPLE)
+        .add_modifier(Modifier::BOLD);
 
     out.push(Line::from(vec![
         Span::raw(pad.clone()),
-        Span::styled(format!("╔{}╗", "═".repeat(inner_w)), cyan),
+        Span::styled(format!("╔{}╗", "═".repeat(inner_w)), frame),
     ]));
     out.push(Line::from(vec![
         Span::raw(pad.clone()),
-        Span::styled("║", cyan),
+        Span::styled("║", frame),
         Span::styled(
             format!("{:^inner_w$}", d.name),
             Style::default()
                 .fg(theme::NEON)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("║", cyan),
+        Span::styled("║", frame),
     ]));
     out.push(Line::from(vec![
         Span::raw(pad.clone()),
-        Span::styled("║", cyan),
+        Span::styled("║", frame),
         Span::styled(format!("{subtitle:^inner_w$}"), theme::dim()),
-        Span::styled("║", cyan),
+        Span::styled("║", frame),
     ]));
     out.push(Line::from(vec![
         Span::raw(pad),
-        Span::styled(format!("╚{}╝", "═".repeat(inner_w)), cyan),
+        Span::styled(format!("╚{}╝", "═".repeat(inner_w)), frame),
     ]));
 }
 

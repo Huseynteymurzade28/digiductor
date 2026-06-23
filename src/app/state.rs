@@ -26,6 +26,10 @@ pub enum InputMode {
     Search,
 }
 
+/// How many evolution branches we display (and allow navigation over) per side.
+/// Kept in sync with the renderer in `ui::evolution`.
+pub const MAX_EVOLUTIONS_SHOWN: usize = 7;
+
 /// Level filter. Labels are the English terms; `api_value` is what the Digi-API
 /// actually understands (it uses the Japanese-tradition naming internally).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,6 +145,12 @@ pub struct App {
     pub detail_id: Option<u32>,
     pub detail_scroll: u16,
 
+    // Evolution matrix navigation. When `evo_focus` is set, the arrow keys drive
+    // a cursor (`evo_selected`) over the branch entries so the user can jump
+    // along the digivolution line.
+    pub evo_focus: bool,
+    pub evo_selected: usize,
+
     // Sprite rendering. `picker` knows the terminal's graphics protocol;
     // `image_state` is the resize-able protocol for the current sprite.
     picker: Picker,
@@ -182,6 +192,8 @@ impl App {
             detail: None,
             detail_id: None,
             detail_scroll: 0,
+            evo_focus: false,
+            evo_selected: 0,
             picker,
             image_state: None,
             image_id: None,
@@ -245,9 +257,21 @@ impl App {
 
     fn on_key_browse(&mut self, key: KeyEvent) {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+
+        // Quit is global regardless of which pane has focus.
+        if key.code == KeyCode::Char('q') || (ctrl && key.code == KeyCode::Char('c')) {
+            self.running = false;
+            return;
+        }
+
+        // When the evolution matrix has focus, route keys to its cursor.
+        if self.evo_focus {
+            self.on_key_evolution(key);
+            return;
+        }
+
         match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => self.running = false,
-            KeyCode::Char('c') if ctrl => self.running = false,
+            KeyCode::Esc => self.running = false,
 
             KeyCode::Down | KeyCode::Char('j') => self.move_selection(1),
             KeyCode::Up | KeyCode::Char('k') => self.move_selection(-1),
@@ -258,6 +282,9 @@ impl App {
             // Detail description scrolling.
             KeyCode::Char(']') => self.detail_scroll = self.detail_scroll.saturating_add(1),
             KeyCode::Char('[') => self.detail_scroll = self.detail_scroll.saturating_sub(1),
+
+            // Hop into the evolution matrix to walk the digivolution line.
+            KeyCode::Char('e') | KeyCode::Tab => self.toggle_evo_focus(),
 
             // Search + filters.
             KeyCode::Char('/') => {
@@ -275,6 +302,74 @@ impl App {
             KeyCode::Char('x') => self.clear_filters(),
             KeyCode::Char('r') => self.reload(),
             _ => {}
+        }
+    }
+
+    /// Key handling while the evolution matrix is focused.
+    fn on_key_evolution(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('e') | KeyCode::Tab | KeyCode::Left | KeyCode::Char('h') => {
+                self.evo_focus = false
+            }
+            KeyCode::Down | KeyCode::Char('j') => self.move_evo(1),
+            KeyCode::Up | KeyCode::Char('k') => self.move_evo(-1),
+            KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => self.enter_evo(),
+            _ => {}
+        }
+    }
+
+    // -- evolution navigation -----------------------------------------------
+
+    /// The navigable (id-bearing) evolution targets for the current Digimon, in
+    /// display order: prior branches first, then next. Ordering and the cap match
+    /// `ui::evolution` so the cursor lines up with what's drawn.
+    pub fn evo_nav_list(&self) -> Vec<(u32, String)> {
+        let Some(d) = &self.detail else {
+            return Vec::new();
+        };
+        d.prior_evolutions
+            .iter()
+            .take(MAX_EVOLUTIONS_SHOWN)
+            .chain(d.next_evolutions.iter().take(MAX_EVOLUTIONS_SHOWN))
+            .filter_map(|e| e.id.map(|id| (id, e.image.clone())))
+            .collect()
+    }
+
+    /// The id of the currently-highlighted evolution, if the matrix is focused.
+    pub fn evo_selected_id(&self) -> Option<u32> {
+        if !self.evo_focus {
+            return None;
+        }
+        self.evo_nav_list().get(self.evo_selected).map(|(id, _)| *id)
+    }
+
+    fn toggle_evo_focus(&mut self) {
+        if self.evo_focus {
+            self.evo_focus = false;
+        } else if !self.evo_nav_list().is_empty() {
+            self.evo_focus = true;
+            self.evo_selected = 0;
+        }
+    }
+
+    fn move_evo(&mut self, delta: i32) {
+        let n = self.evo_nav_list().len() as i32;
+        if n == 0 {
+            return;
+        }
+        self.evo_selected = (self.evo_selected as i32 + delta).rem_euclid(n) as usize;
+    }
+
+    /// Jump to the highlighted evolution, loading its record and sprite.
+    fn enter_evo(&mut self) {
+        if let Some((id, image)) = self.evo_nav_list().get(self.evo_selected).cloned() {
+            // Mirror the selection in the index if the target is loaded there.
+            if let Some(pos) = self.list.iter().position(|s| s.id == id) {
+                self.list_state.select(Some(pos));
+            }
+            self.load_detail(id);
+            self.load_image(id, image);
+            self.status = format!("Digivolving → #{id}…");
         }
     }
 
@@ -351,6 +446,7 @@ impl App {
     fn load_detail(&mut self, id: u32) {
         self.detail_id = Some(id);
         self.detail_scroll = 0;
+        self.evo_selected = 0;
 
         if let Some(cached) = self.cache.get(id) {
             self.detail = Some(cached);
