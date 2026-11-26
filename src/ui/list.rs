@@ -17,7 +17,12 @@ use crate::ui::spinner;
 
 pub fn render(f: &mut Frame, area: Rect, app: &mut App) {
     let searching = app.mode == InputMode::Search;
-    let block = theme::panel("◈ DIGI-INDEX", searching);
+    let title = if app.vault_view {
+        "★ DIGI-VAULT"
+    } else {
+        "◈ DIGI-INDEX"
+    };
+    let block = theme::panel(title, searching || app.vault_view);
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -71,6 +76,20 @@ fn render_filters(f: &mut Frame, area: Rect, app: &App) {
             Span::raw(" "),
         ]
     };
+    if app.vault_view {
+        let line = Line::from(vec![
+            Span::styled(
+                format!(" ★ {} saved ", app.favorites.len()),
+                Style::default()
+                    .fg(theme::BG)
+                    .bg(theme::AMBER)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("  v to exit", theme::dim()),
+        ]);
+        f.render_widget(Paragraph::new(line), area);
+        return;
+    }
     let mut spans = chip("LVL", app.level_filter.label());
     spans.extend(chip("ATR", app.attribute_filter.label()));
     f.render_widget(Paragraph::new(Line::from(spans)), area);
@@ -92,6 +111,15 @@ fn render_list(f: &mut Frame, area: Rect, app: &mut App) {
     if app.list.is_empty() {
         let lines = if app.loading_list {
             spinner::boot_lines(app.tick_count)
+        } else if app.vault_view {
+            vec![
+                Line::from(""),
+                Line::from(Span::styled("  ☆ the vault is empty", theme::dim())),
+                Line::from(Span::styled(
+                    "  press 'f' on a Digimon to save it",
+                    theme::dim(),
+                )),
+            ]
         } else {
             vec![
                 Line::from(""),
@@ -118,10 +146,16 @@ fn render_list(f: &mut Frame, area: Rect, app: &mut App) {
             } else {
                 theme::value()
             };
+            let star = if app.favorites.contains(d.id) {
+                Span::styled(" ★", Style::default().fg(theme::AMBER))
+            } else {
+                Span::raw("")
+            };
             ListItem::new(Line::from(vec![
                 Span::styled(marker, Style::default().fg(theme::NEON)),
                 Span::styled(format!("#{:<4} ", d.id), theme::dim()),
                 Span::styled(d.name.clone(), name_style),
+                star,
             ]))
         })
         .collect();

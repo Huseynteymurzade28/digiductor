@@ -73,6 +73,10 @@ pub struct DigimonPage {
 pub struct Digimon {
     pub id: u32,
     pub name: String,
+    #[serde(rename = "xAntibody", default)]
+    pub x_antibody: bool,
+    #[serde(default)]
+    pub images: Vec<ImageEntry>,
     #[serde(default)]
     pub levels: Vec<LevelEntry>,
     #[serde(default)]
@@ -81,12 +85,37 @@ pub struct Digimon {
     pub attributes: Vec<AttributeEntry>,
     #[serde(default)]
     pub descriptions: Vec<Description>,
+    #[serde(default)]
+    pub fields: Vec<FieldEntry>,
+    #[serde(default)]
+    pub skills: Vec<Skill>,
     #[serde(rename = "releaseDate", default)]
     pub release_date: String,
     #[serde(rename = "priorEvolutions", default)]
     pub prior_evolutions: Vec<Evolution>,
     #[serde(rename = "nextEvolutions", default)]
     pub next_evolutions: Vec<Evolution>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ImageEntry {
+    #[serde(default)]
+    pub href: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FieldEntry {
+    #[serde(default)]
+    pub field: String,
+}
+
+/// A signature move.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Skill {
+    #[serde(default)]
+    pub skill: String,
+    #[serde(default)]
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -139,7 +168,11 @@ impl Digimon {
         self.descriptions
             .iter()
             .find(|d| d.language.eq_ignore_ascii_case("en_us"))
-            .or_else(|| self.descriptions.iter().find(|d| d.language.starts_with("en")))
+            .or_else(|| {
+                self.descriptions
+                    .iter()
+                    .find(|d| d.language.starts_with("en"))
+            })
             .or_else(|| self.descriptions.first())
             .map(|d| d.description.as_str())
             .unwrap_or("No description on record for this Digimon.")
@@ -151,6 +184,37 @@ impl Digimon {
 
     pub fn primary_attribute(&self) -> Option<&str> {
         self.attributes.first().map(|a| a.attribute.as_str())
+    }
+
+    pub fn image_url(&self) -> Option<&str> {
+        self.images
+            .iter()
+            .map(|i| i.href.as_str())
+            .find(|h| !h.trim().is_empty())
+    }
+
+    pub fn field_list(&self) -> Option<String> {
+        if self.fields.is_empty() {
+            None
+        } else {
+            Some(
+                self.fields
+                    .iter()
+                    .map(|f| f.field.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            )
+        }
+    }
+
+    /// Lightweight summary, used when saving to the vault.
+    pub fn summary(&self) -> DigimonSummary {
+        DigimonSummary {
+            id: self.id,
+            name: self.name.clone(),
+            image: self.image_url().unwrap_or_default().to_string(),
+            href: String::new(),
+        }
     }
 
     pub fn type_list(&self) -> String {

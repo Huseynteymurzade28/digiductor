@@ -54,6 +54,8 @@ fn cache_path() -> PathBuf {
     let mut dir = dirs::cache_dir().unwrap_or_else(std::env::temp_dir);
     dir.push("digiductor");
     let _ = std::fs::create_dir_all(&dir);
-    dir.push("digimon_cache.json");
+    // Versioned name: v2 records carry skills/fields/images, so v1 entries
+    // (which would deserialize with those empty) are simply left behind.
+    dir.push("digimon_cache_v2.json");
     dir
 }

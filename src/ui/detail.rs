@@ -63,7 +63,8 @@ pub fn render(f: &mut Frame, area: Rect, app: &mut App) {
     };
 
     if let Some(d) = &app.detail {
-        let para = Paragraph::new(data_sheet(d))
+        let fav = app.favorites.contains(d.id);
+        let para = Paragraph::new(data_sheet(d, fav))
             .wrap(Wrap { trim: true })
             .scroll((app.detail_scroll, 0));
         f.render_widget(para, text_area);
@@ -75,7 +76,14 @@ fn render_sprite(f: &mut Frame, area: Rect, app: &mut App) {
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(theme::dim())
-        .title(Span::styled(" SPRITE ", theme::cyan()));
+        .title(Span::styled(" SPRITE ", theme::cyan()))
+        .title_bottom(
+            Line::from(Span::styled(
+                format!(" {} · p ", app.sprite_style.label()),
+                theme::dim(),
+            ))
+            .right_aligned(),
+        );
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -95,16 +103,30 @@ fn render_sprite(f: &mut Frame, area: Rect, app: &mut App) {
     }
 }
 
-fn data_sheet(d: &Digimon) -> Vec<Line<'static>> {
+fn data_sheet(d: &Digimon, favorite: bool) -> Vec<Line<'static>> {
     let mut lines: Vec<Line> = Vec::new();
 
-    // Name banner.
-    lines.push(Line::from(Span::styled(
+    // Name banner, with vault star and X-Antibody badge.
+    let mut banner = vec![Span::styled(
         format!("⟪ {} ⟫", d.name.to_uppercase()),
         Style::default()
             .fg(theme::NEON)
             .add_modifier(Modifier::BOLD),
-    )));
+    )];
+    if favorite {
+        banner.push(Span::styled(" ★", Style::default().fg(theme::AMBER)));
+    }
+    if d.x_antibody {
+        banner.push(Span::raw(" "));
+        banner.push(Span::styled(
+            " X-ANTIBODY ",
+            Style::default()
+                .fg(theme::BG)
+                .bg(theme::RED)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+    lines.push(Line::from(banner));
     lines.push(Line::from(Span::styled(
         format!("#{:04}  ·  released {}", d.id, year(&d.release_date)),
         theme::dim(),
@@ -124,6 +146,9 @@ fn data_sheet(d: &Digimon) -> Vec<Line<'static>> {
         lines.push(stat("ATTRIBUTE", "—", theme::DIM));
     }
     lines.push(stat("TYPE", &d.type_list(), theme::CYAN));
+    if let Some(fields) = d.field_list() {
+        lines.push(stat("FIELD", &fields, theme::AMBER));
+    }
     lines.push(stat(
         "EVO PATHS",
         &format!(
@@ -142,6 +167,38 @@ fn data_sheet(d: &Digimon) -> Vec<Line<'static>> {
     )));
     for para in d.english_description().split('\n') {
         lines.push(Line::from(Span::styled(para.to_string(), theme::value())));
+    }
+
+    // Signature moves.
+    let skills: Vec<_> = d
+        .skills
+        .iter()
+        .filter(|s| !s.skill.trim().is_empty())
+        .collect();
+    if !skills.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "── SIGNATURE MOVES ──────────",
+            theme::dim(),
+        )));
+        for s in skills {
+            let mut spans = vec![
+                Span::styled("✦ ", Style::default().fg(theme::MAGENTA)),
+                Span::styled(
+                    s.skill.trim().to_string(),
+                    Style::default()
+                        .fg(theme::MAGENTA)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ];
+            if !s.description.trim().is_empty() {
+                spans.push(Span::styled(
+                    format!(" — {}", s.description.trim()),
+                    theme::dim(),
+                ));
+            }
+            lines.push(Line::from(spans));
+        }
     }
 
     lines
